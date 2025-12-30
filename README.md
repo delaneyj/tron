@@ -74,6 +74,10 @@ Note: TRON updates are copy-on-write. The modify benchmark only re-encodes nodes
 - Arbitrary user-defined types (use MsgPack/CBOR for richer types; TRON stays language/type-system agnostic).
 - Acting as a database or primary on-disk storage format.
 
+## Inspiration
+
+TRON was inspired by conversations with the lite3.io author. Those exchanges helped push a rebrand, but there was enough difference and friction in requirements that a distinct format was needed.
+
 ## Spec
 
 See `SPEC.md` for the draft binary format and `PRIMER.md` for a HAMT/vector trie overview.
