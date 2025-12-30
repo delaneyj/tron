@@ -1,0 +1,106 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Trailhead",
+        "elevation": 1200,
+        "status": "open",
+        "tags": ["start", "parking"]
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-122.420679, 37.772537]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Creek",
+        "elevation": 980,
+        "status": "seasonal"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-122.421, 37.772],
+          [-122.422, 37.773],
+          [-122.423, 37.774],
+          [-122.424, 37.775]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Loop",
+        "elevation": 1340,
+        "status": "open"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-122.420, 37.771],
+            [-122.419, 37.772],
+            [-122.418, 37.771],
+            [-122.419, 37.770],
+            [-122.420, 37.771]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Peak",
+        "elevation": 1890,
+        "status": "closed",
+        "notes": "snow"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-122.430001, 37.780001]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Ridge",
+        "elevation": 1450,
+        "status": "open"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-122.426, 37.776],
+          [-122.427, 37.777],
+          [-122.428, 37.778],
+          [-122.429, 37.779],
+          [-122.430, 37.780]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Area",
+        "elevation": 1020,
+        "status": "open"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-122.425, 37.768],
+            [-122.424, 37.769],
+            [-122.423, 37.768],
+            [-122.424, 37.767],
+            [-122.425, 37.768]
+          ]
+        ]
+      }
+    }
+  ]
+}

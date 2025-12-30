@@ -1,0 +1,4 @@
+bench_*.txt
+bench_path_*.txt
+*.test
+*.out

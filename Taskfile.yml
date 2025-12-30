@@ -1,0 +1,68 @@
+version: "3"
+
+vars:
+  GO_DIR: implementations/go/tron
+
+tasks:
+  test:
+    desc: Run all Go tests.
+    dir: "{{.GO_DIR}}"
+    cmds:
+      - go test ./...
+
+  test:race:
+    desc: Run Go tests with the race detector.
+    dir: "{{.GO_DIR}}"
+    cmds:
+      - go test -race ./...
+
+  bench:
+    desc: Run all Go benchmarks.
+    dir: "{{.GO_DIR}}"
+    cmds:
+      - go test -bench . -benchmem -run=^$ ./...
+
+  bench:path:
+    desc: Run TRON path (JMESPath-style) benchmarks.
+    dir: "{{.GO_DIR}}"
+    cmds:
+      - go test -bench BenchmarkJMESPath -benchmem -run=^$ ./path
+
+  bench:save:
+    desc: Run all benchmarks and save output.
+    dir: "{{.GO_DIR}}"
+    vars:
+      NAME: "{{.NAME | default \"latest\"}}"
+    cmds:
+      - go test -bench . -benchmem -run=^$ ./... | tee "bench_{{.NAME}}.txt"
+
+  bench:path:save:
+    desc: Run path benchmarks and save output.
+    dir: "{{.GO_DIR}}"
+    vars:
+      NAME: "{{.NAME | default \"latest\"}}"
+    cmds:
+      - go test -bench BenchmarkJMESPath -benchmem -run=^$ ./path | tee "bench_path_{{.NAME}}.txt"
+
+  benchstat:
+    desc: Compare two benchmark files with benchstat.
+    dir: "{{.GO_DIR}}"
+    vars:
+      OLD: "{{.OLD}}"
+      NEW: "{{.NEW}}"
+    cmds:
+      - benchstat "{{.OLD}}" "{{.NEW}}"
+
+  benchstat:latest:
+    desc: Compare two saved benchmark files in the Go dir.
+    dir: "{{.GO_DIR}}"
+    vars:
+      OLD: "{{.OLD | default \"bench_full_run1.txt\"}}"
+      NEW: "{{.NEW | default \"bench_full_run2.txt\"}}"
+    cmds:
+      - benchstat "{{.OLD}}" "{{.NEW}}"
+
+  benchstat:install:
+    desc: Install benchstat.
+    cmds:
+      - go install golang.org/x/perf/cmd/benchstat@latest
