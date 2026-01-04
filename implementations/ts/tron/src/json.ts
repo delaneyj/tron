@@ -1,6 +1,5 @@
 import { decode, encode } from "./codec";
 import type { DecodeOptions, TronValue } from "./codec";
-import { decodeBase64, encodeBase64 } from "./base64";
 
 const textDecoder = new TextDecoder();
 
@@ -12,13 +11,19 @@ const parseJSONValue = (value: unknown): TronValue => {
   if (typeof value === "boolean") return value;
   if (typeof value === "string") {
     if (value.startsWith("b64:")) {
-      const decoded = decodeBase64(value.slice(4));
-      if (decoded) return decoded;
+      try {
+        const bin = atob(value.slice(4));
+        const out = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) {
+          out[i] = bin.charCodeAt(i);
+        }
+        return out;
+      } catch {}
     }
     return value;
   }
   if (typeof value === "number") {
-    if (!Number.isFinite(value)) throw new Error("json number must be finite");
+    if (!Number.isFinite(value)) throw new Error("num");
     if (Number.isInteger(value)) {
       const asBigInt = BigInt(value);
       if (asBigInt >= MIN_I64 && asBigInt <= MAX_I64) {
@@ -37,20 +42,24 @@ const parseJSONValue = (value: unknown): TronValue => {
     }
     return out;
   }
-  throw new Error("unsupported json value");
+  throw new Error("type");
 };
 
 const stringifyJSONValue = (value: TronValue): string => {
   if (value === null) return "null";
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number") {
-    if (!Number.isFinite(value)) throw new Error("number must be finite");
+    if (!Number.isFinite(value)) throw new Error("num");
     return JSON.stringify(value);
   }
   if (typeof value === "bigint") return value.toString();
   if (typeof value === "string") return JSON.stringify(value);
   if (value instanceof Uint8Array) {
-    return JSON.stringify(`b64:${encodeBase64(value)}`);
+    let bin = "";
+    for (let i = 0; i < value.length; i++) {
+      bin += String.fromCharCode(value[i]);
+    }
+    return JSON.stringify(`b64:${btoa(bin)}`);
   }
   if (Array.isArray(value)) {
     return `[${value.map((entry) => stringifyJSONValue(entry)).join(",")}]`;

@@ -57,9 +57,7 @@ describe("tron encode/decode", () => {
     expect(decode(safeDoc)).toBe(Number(safe));
     expect(decode(unsafeDoc)).toBe(unsafe);
 
-    expect(() => decode(unsafeDoc, { i64: "number" })).toThrow(
-      "i64 value exceeds safe integer range",
-    );
+    expect(() => decode(unsafeDoc, { i64: "number" })).toThrow("range");
 
     expect(decode(safeDoc, { i64: "bigint" })).toBe(safe);
     expect(decode(unsafeDoc, { i64: "bigint" })).toBe(unsafe);
