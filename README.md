@@ -14,7 +14,7 @@ This repository hosts the evolving spec and a reference implementation in Go.
 - Random access without decoding the full document.
 - Efficient map/array updates via HAMT + vector trie nodes.
 - Stream-friendly: read nodes as needed from a byte slice.
-- Go reference implementation includes JSON Patch, JSON Merge Patch, and JMESPath-style queries.
+- Go reference implementation includes JSON Merge Patch and JMESPath-style queries.
 
 ## Status
 
@@ -87,7 +87,6 @@ See `SPEC.md` for the draft binary format and `PRIMER.md` for a HAMT/vector trie
 The Go implementation lives under `implementations/go/tron` (module `tron`) and tracks the spec as it evolves.
 
 Path queries (JMESPath-style) live under `implementations/go/tron/path`.
-JSON Patch (RFC 6902) lives under `implementations/go/tron/patch`.
 JSON Merge Patch (RFC 7386) lives under `implementations/go/tron/merge`.
 
 ## Contributing
