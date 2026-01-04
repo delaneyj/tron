@@ -19,8 +19,8 @@ Collision handling:
 Hash path example:
 
 ```
-xxh32("name") = 0xA1B2C3D4
-slots: A -> 1 -> B -> 2 -> C -> 3 -> D -> 4
+xxh32("name") = 0xCC0BC31F
+slots: C -> C -> 0 -> B -> C -> 3 -> 1 -> F
 ```
 
 HAMT shape (schematic):

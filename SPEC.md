@@ -153,11 +153,6 @@ round(acc, input):
   acc = acc * PRIME1
   return acc
 
-mergeRound(acc, val):
-  acc = acc ^ round(0, val)
-  acc = acc * PRIME1 + PRIME4
-  return acc
-
 xxh32(data, seed):
   p = 0
   len = data.length
@@ -173,10 +168,6 @@ xxh32(data, seed):
       v3 = round(v3, read_u32_le(data, p)); p += 4
       v4 = round(v4, read_u32_le(data, p)); p += 4
     h32 = rotl(v1, 1) + rotl(v2, 7) + rotl(v3, 12) + rotl(v4, 18)
-    h32 = mergeRound(h32, v1)
-    h32 = mergeRound(h32, v2)
-    h32 = mergeRound(h32, v3)
-    h32 = mergeRound(h32, v4)
   else:
     h32 = seed + PRIME5
 
@@ -199,6 +190,8 @@ xxh32(data, seed):
 ```
 
 All arithmetic is modulo 2^32. `read_u32_le` reads 4 bytes little-endian.
+
+Reference implementation: xxh32 MUST match Cyan4973/xxHash (release branch). Canonical test vectors are available in `test_vectors/xxhash_sanity_test_vectors.json`, derived from `tests/sanity_test_vectors.h` in that repo.
 
 Branch node layout (map):
 

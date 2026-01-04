@@ -14,12 +14,6 @@ const round = (acc: number, input: number): number => {
   return acc;
 };
 
-const mergeRound = (acc: number, val: number): number => {
-  acc ^= round(0, val);
-  acc = (Math.imul(acc, PRIME1) + PRIME4) >>> 0;
-  return acc;
-};
-
 const readUint32LE = (data: Uint8Array, offset: number): number =>
   (data[offset] |
     (data[offset + 1] << 8) |
@@ -47,10 +41,6 @@ export const xxh32 = (data: Uint8Array, seed = 0): number => {
     h32 =
       (rotl32(v1, 1) + rotl32(v2, 7) + rotl32(v3, 12) + rotl32(v4, 18)) >>>
       0;
-    h32 = mergeRound(h32, v1);
-    h32 = mergeRound(h32, v2);
-    h32 = mergeRound(h32, v3);
-    h32 = mergeRound(h32, v4);
   } else {
     h32 = (seed + PRIME5) >>> 0;
   }

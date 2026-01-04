@@ -21,11 +21,6 @@ func XXH32(data []byte, seed uint32) uint32 {
 		acc *= xxh32Prime1
 		return acc
 	}
-	mergeRound := func(acc, val uint32) uint32 {
-		acc ^= round(0, val)
-		acc = acc*xxh32Prime1 + xxh32Prime4
-		return acc
-	}
 
 	p := 0
 	length := len(data)
@@ -47,10 +42,6 @@ func XXH32(data []byte, seed uint32) uint32 {
 			p += 4
 		}
 		h32 = rotl(v1, 1) + rotl(v2, 7) + rotl(v3, 12) + rotl(v4, 18)
-		h32 = mergeRound(h32, v1)
-		h32 = mergeRound(h32, v2)
-		h32 = mergeRound(h32, v3)
-		h32 = mergeRound(h32, v4)
 	} else {
 		h32 = seed + xxh32Prime5
 	}
