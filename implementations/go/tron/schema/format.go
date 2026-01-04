@@ -6,6 +6,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+
+	"golang.org/x/net/idna"
 )
 
 // Format defined specific format.
@@ -26,14 +29,16 @@ var formats = map[string]*Format{
 	"ipv4":                  {"ipv4", validateIPV4},
 	"ipv6":                  {"ipv6", validateIPV6},
 	"hostname":              {"hostname", validateHostname},
+	"idn-hostname":          {"idn-hostname", validateIDNHostname},
 	"email":                 {"email", validateEmail},
+	"idn-email":             {"idn-email", validateIDNEmail},
 	"date":                  {"date", validateDate},
 	"time":                  {"time", validateTime},
 	"date-time":             {"date-time", validateDateTime},
 	"uri":                   {"uri", validateURI},
-	"iri":                   {"iri", validateURI},
+	"iri":                   {"iri", validateIRI},
 	"uri-reference":         {"uri-reference", validateURIReference},
-	"iri-reference":         {"iri-reference", validateURIReference},
+	"iri-reference":         {"iri-reference", validateIRIReference},
 	"uri-template":          {"uri-template", validateURITemplate},
 	"semver":                {"semver", validateSemver},
 }
@@ -257,39 +262,219 @@ func validateHostname(v any) error {
 	if !ok {
 		return nil
 	}
+	if s == "" {
+		return LocalizableError("empty hostname")
+	}
 
-	// entire hostname (including the delimiting dots but not a trailing dot) has a maximum of 253 ASCII characters
-	s = strings.TrimSuffix(s, ".")
-	if len(s) > 253 {
-		return LocalizableError("more than 253 characters long")
+	if err := requireASCII(s); err != nil {
+		return err
+	}
+	if strings.HasSuffix(s, ".") {
+		return LocalizableError("trailing dot")
 	}
 
 	// Hostnames are composed of series of labels concatenated with dots, as are all domain names
 	for _, label := range strings.Split(s, ".") {
-		// Each label must be from 1 to 63 characters long
-		if len(label) < 1 || len(label) > 63 {
+		if err := validateHostnameLabelASCII(label); err != nil {
+			return err
+		}
+		if strings.HasPrefix(label, "xn--") {
+			if err := validateIDNAALabel(label); err != nil {
+				return err
+			}
+		}
+	}
+	// entire hostname (including the delimiting dots) has a maximum of 253 ASCII characters
+	if len(s) > 253 {
+		return LocalizableError("more than 253 characters long")
+	}
+	return nil
+}
+
+func validateIDNHostname(v any) error {
+	s, ok := v.(string)
+	if !ok {
+		return nil
+	}
+	if s == "" {
+		return LocalizableError("empty hostname")
+	}
+	s = normalizeIDNHostnameSeparators(s)
+	if strings.HasSuffix(s, ".") {
+		return LocalizableError("trailing dot")
+	}
+
+	labels := strings.Split(s, ".")
+	asciiLen := 0
+	for i, label := range labels {
+		if label == "" {
 			return LocalizableError("label must be 1 to 63 characters long")
 		}
-
-		// labels must not start or end with a hyphen
-		if strings.HasPrefix(label, "-") {
-			return LocalizableError("label starts with hyphen")
+		if isASCII(label) && len(label) >= 4 && label[2] == '-' && label[3] == '-' && !strings.HasPrefix(label, "xn--") {
+			return LocalizableError("punycode label missing prefix")
 		}
-		if strings.HasSuffix(label, "-") {
-			return LocalizableError("label ends with hyphen")
+		asciiLabel, err := idna.Lookup.ToASCII(label)
+		if err != nil {
+			return LocalizableError("invalid idn label")
+		}
+		if err := validateHostnameLabelASCII(asciiLabel); err != nil {
+			return err
+		}
+		if err := validateIDNAALabel(asciiLabel); err != nil {
+			return err
 		}
 
-		// labels may contain only the ASCII letters 'a' through 'z' (in a case-insensitive manner),
-		// the digits '0' through '9', and the hyphen ('-')
-		for _, ch := range label {
-			switch {
-			case ch >= 'a' && ch <= 'z':
-			case ch >= 'A' && ch <= 'Z':
-			case ch >= '0' && ch <= '9':
-			case ch == '-':
-			default:
-				return LocalizableError("invalid character %q", ch)
+		asciiLen += len(asciiLabel)
+		if i > 0 {
+			asciiLen++
+		}
+		if asciiLen > 253 {
+			return LocalizableError("more than 253 characters long")
+		}
+	}
+	return nil
+}
+
+func normalizeIDNHostnameSeparators(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch r {
+		case '.', 0x3002, 0xFF0E, 0xFF61:
+			b.WriteByte('.')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func validateHostnameLabelASCII(label string) error {
+	// Each label must be from 1 to 63 characters long
+	if len(label) < 1 || len(label) > 63 {
+		return LocalizableError("label must be 1 to 63 characters long")
+	}
+
+	// labels must not start or end with a hyphen
+	if strings.HasPrefix(label, "-") {
+		return LocalizableError("label starts with hyphen")
+	}
+	if strings.HasSuffix(label, "-") {
+		return LocalizableError("label ends with hyphen")
+	}
+
+	if len(label) >= 4 && label[2] == '-' && label[3] == '-' && !strings.HasPrefix(label, "xn--") {
+		return LocalizableError("punycode label missing prefix")
+	}
+
+	// labels may contain only the ASCII letters 'a' through 'z' (in a case-insensitive manner),
+	// the digits '0' through '9', and the hyphen ('-')
+	for _, ch := range label {
+		switch {
+		case ch >= 'a' && ch <= 'z':
+		case ch >= 'A' && ch <= 'Z':
+		case ch >= '0' && ch <= '9':
+		case ch == '-':
+		default:
+			return LocalizableError("invalid character %q", ch)
+		}
+	}
+	return nil
+}
+
+func validateIDNAALabel(label string) error {
+	if !strings.HasPrefix(label, "xn--") {
+		return nil
+	}
+	uLabel, err := idna.Lookup.ToUnicode(label)
+	if err != nil {
+		return LocalizableError("invalid punycode label")
+	}
+	return validateIDNAContextLabel(uLabel)
+}
+
+func validateIDNAContextLabel(label string) error {
+	runes := []rune(label)
+	hasHiraKataHan := false
+	hasKatakanaMiddleDot := false
+	hasArabicIndic := false
+	hasExtArabicIndic := false
+
+	for i, r := range runes {
+		if isDisallowedIDNAException(r) {
+			return LocalizableError("disallowed codepoint %U", r)
+		}
+		if r != 0x30FB && unicode.In(r, unicode.Hiragana, unicode.Katakana, unicode.Han) {
+			hasHiraKataHan = true
+		}
+		if r >= 0x0660 && r <= 0x0669 {
+			hasArabicIndic = true
+		}
+		if r >= 0x06F0 && r <= 0x06F9 {
+			hasExtArabicIndic = true
+		}
+
+		switch r {
+		case 0x00B7:
+			if i == 0 || i == len(runes)-1 || runes[i-1] != 'l' || runes[i+1] != 'l' {
+				return LocalizableError("invalid middle dot context")
 			}
+		case 0x0375:
+			if i == len(runes)-1 || !unicode.Is(unicode.Greek, runes[i+1]) {
+				return LocalizableError("invalid greek keraia context")
+			}
+		case 0x05F3, 0x05F4:
+			if i == 0 || !unicode.Is(unicode.Hebrew, runes[i-1]) {
+				return LocalizableError("invalid hebrew punctuation context")
+			}
+		case 0x30FB:
+			hasKatakanaMiddleDot = true
+		}
+	}
+
+	if hasKatakanaMiddleDot && !hasHiraKataHan {
+		return LocalizableError("invalid katakana middle dot context")
+	}
+	if hasArabicIndic && hasExtArabicIndic {
+		return LocalizableError("mixed arabic-indic digits")
+	}
+	return nil
+}
+
+func isDisallowedIDNAException(r rune) bool {
+	switch {
+	case r == 0x0640, r == 0x07FA, r == 0x302E, r == 0x302F, r == 0x303B:
+		return true
+	case r >= 0x3031 && r <= 0x3035:
+		return true
+	default:
+		return false
+	}
+}
+
+func isASCII(s string) bool {
+	for _, ch := range s {
+		if ch > 127 {
+			return false
+		}
+	}
+	return true
+}
+
+func requireASCII(s string) error {
+	for _, ch := range s {
+		if ch > 127 {
+			return LocalizableError("non-ascii character %q", ch)
+		}
+	}
+	return nil
+}
+
+func rejectInvalidURIChars(s string) error {
+	for _, ch := range s {
+		switch ch {
+		case '\\', '"', '<', '>', '{', '}', '^', '`', ' ', '|':
+			return LocalizableError("invalid character %q", ch)
 		}
 	}
 	return nil
@@ -368,6 +553,71 @@ func validateEmail(v any) error {
 
 	// domain must match the requirements for a hostname
 	if err := validateHostname(domain); err != nil {
+		return LocalizableError("invalid domain: %v", err)
+	}
+
+	return nil
+}
+
+// see https://datatracker.ietf.org/doc/html/rfc6531
+func validateIDNEmail(v any) error {
+	s, ok := v.(string)
+	if !ok {
+		return nil
+	}
+
+	at := strings.LastIndexByte(s, '@')
+	if at == -1 {
+		return LocalizableError("missing @")
+	}
+	local, domain := s[:at], s[at+1:]
+	if local == "" || domain == "" {
+		return LocalizableError("missing local or domain")
+	}
+
+	if len(local) > 1 && strings.HasPrefix(local, `"`) && strings.HasPrefix(local, `"`) {
+		local := local[1 : len(local)-1]
+		if strings.IndexByte(local, '\\') != -1 || strings.IndexByte(local, '"') != -1 {
+			return LocalizableError("backslash and quote are not allowed within quoted local part")
+		}
+	} else {
+		if strings.HasPrefix(local, ".") {
+			return LocalizableError("starts with dot")
+		}
+		if strings.HasSuffix(local, ".") {
+			return LocalizableError("ends with dot")
+		}
+		if strings.Contains(local, "..") {
+			return LocalizableError("consecutive dots")
+		}
+		for _, ch := range local {
+			switch {
+			case ch >= 'a' && ch <= 'z':
+			case ch >= 'A' && ch <= 'Z':
+			case ch >= '0' && ch <= '9':
+			case strings.ContainsRune(".!#$%&'*+-/=?^_`{|}~", ch):
+			case unicode.IsLetter(ch) || unicode.IsNumber(ch) || unicode.IsMark(ch):
+			default:
+				return LocalizableError("invalid character %q", ch)
+			}
+		}
+	}
+
+	if strings.HasPrefix(domain, "[") && strings.HasSuffix(domain, "]") {
+		domain = domain[1 : len(domain)-1]
+		if rem, ok := strings.CutPrefix(domain, "IPv6:"); ok {
+			if err := validateIPV6(rem); err != nil {
+				return LocalizableError("invalid ipv6 address: %v", err)
+			}
+			return nil
+		}
+		if err := validateIPV4(domain); err != nil {
+			return LocalizableError("invalid ipv4 address: %v", err)
+		}
+		return nil
+	}
+
+	if err := validateIDNHostname(domain); err != nil {
 		return LocalizableError("invalid domain: %v", err)
 	}
 
@@ -537,6 +787,30 @@ func validateURI(v any) error {
 	if !ok {
 		return nil
 	}
+	if err := requireASCII(s); err != nil {
+		return err
+	}
+	if err := rejectInvalidURIChars(s); err != nil {
+		return err
+	}
+	u, err := parseURL(s)
+	if err != nil {
+		return err
+	}
+	if !u.IsAbs() {
+		return LocalizableError("relative url")
+	}
+	return nil
+}
+
+func validateIRI(v any) error {
+	s, ok := v.(string)
+	if !ok {
+		return nil
+	}
+	if err := rejectInvalidURIChars(s); err != nil {
+		return err
+	}
 	u, err := parseURL(s)
 	if err != nil {
 		return err
@@ -552,8 +826,23 @@ func validateURIReference(v any) error {
 	if !ok {
 		return nil
 	}
-	if strings.Contains(s, `\`) {
-		return LocalizableError(`contains \`)
+	if err := requireASCII(s); err != nil {
+		return err
+	}
+	if err := rejectInvalidURIChars(s); err != nil {
+		return err
+	}
+	_, err := parseURL(s)
+	return err
+}
+
+func validateIRIReference(v any) error {
+	s, ok := v.(string)
+	if !ok {
+		return nil
+	}
+	if err := rejectInvalidURIChars(s); err != nil {
+		return err
 	}
 	_, err := parseURL(s)
 	return err

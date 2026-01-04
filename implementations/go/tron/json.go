@@ -1,8 +1,11 @@
 package tron
 
 import (
+	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"strconv"
 	"strings"
@@ -12,6 +15,17 @@ import (
 
 // FromJSON parses JSON using simdjson-go and returns a TRON document.
 func FromJSON(data []byte) ([]byte, error) {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 {
+		return nil, fmt.Errorf("json input is empty")
+	}
+	if trimmed[0] != '{' && trimmed[0] != '[' {
+		val, err := scalarValueFromJSON(trimmed)
+		if err != nil {
+			return nil, err
+		}
+		return EncodeScalarDocument(val)
+	}
 	parsed, err := simdjson.Parse(data, nil)
 	if err != nil {
 		return nil, err
@@ -35,6 +49,49 @@ func FromJSON(data []byte) ([]byte, error) {
 		return builder.BytesWithTrailer(val.Offset, 0), nil
 	default:
 		return EncodeScalarDocument(val)
+	}
+}
+
+func scalarValueFromJSON(data []byte) (Value, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return Value{}, err
+	}
+	if _, err := dec.Token(); err == nil || err != io.EOF {
+		return Value{}, fmt.Errorf("invalid character after top-level value")
+	}
+	switch val := v.(type) {
+	case nil:
+		return Value{Type: TypeNil}, nil
+	case bool:
+		return Value{Type: TypeBit, Bool: val}, nil
+	case json.Number:
+		if i, err := val.Int64(); err == nil {
+			return Value{Type: TypeI64, I64: i}, nil
+		}
+		if f, err := val.Float64(); err == nil {
+			return Value{Type: TypeF64, F64: f}, nil
+		}
+		return Value{}, fmt.Errorf("invalid json number: %s", val)
+	case float64:
+		if val >= math.MinInt64 && val <= math.MaxInt64 {
+			if math.Trunc(val) == val {
+				return Value{Type: TypeI64, I64: int64(val)}, nil
+			}
+		}
+		return Value{Type: TypeF64, F64: val}, nil
+	case string:
+		if len(val) >= 4 && val[0] == 'b' && val[1] == '6' && val[2] == '4' && val[3] == ':' {
+			rest := val[4:]
+			if decoded, err := base64.StdEncoding.DecodeString(rest); err == nil {
+				return Value{Type: TypeBin, Bytes: decoded}, nil
+			}
+		}
+		return Value{Type: TypeTxt, Bytes: []byte(val)}, nil
+	default:
+		return Value{}, fmt.Errorf("unsupported scalar json type %T", v)
 	}
 }
 

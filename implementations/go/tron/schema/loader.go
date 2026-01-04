@@ -182,7 +182,22 @@ func (l *defaultLoader) getDraft(up urlPtr, doc any, defaultDraft *Draft, cycle 
 		return draft, nil
 	}
 	sch, _ = split(sch)
-	return nil, &UnsupportedDraftError{sch}
+	if _, err := gourl.Parse(sch); err != nil {
+		return nil, &InvalidMetaSchemaURLError{up.String(), err}
+	}
+	schURL := url(sch)
+	if up.ptr.isEmpty() && schURL == up.url {
+		return nil, &UnsupportedDraftError{schURL.String()}
+	}
+	if _, ok := cycle[schURL]; ok {
+		return nil, &MetaSchemaCycleError{schURL.String()}
+	}
+	cycle[schURL] = struct{}{}
+	doc, err := l.load(schURL)
+	if err != nil {
+		return nil, err
+	}
+	return l.getDraft(urlPtr{schURL, ""}, doc, defaultDraft, cycle)
 }
 
 func (l *defaultLoader) getMetaVocabs(doc any, draft *Draft, vocabularies map[string]*Vocabulary) ([]string, error) {
@@ -198,7 +213,15 @@ func (l *defaultLoader) getMetaVocabs(doc any, draft *Draft, vocabularies map[st
 		return nil, nil
 	}
 	sch, _ = split(sch)
-	return nil, &UnsupportedDraftError{sch}
+	if _, err := gourl.Parse(sch); err != nil {
+		return nil, &ParseURLError{sch, err}
+	}
+	schURL := url(sch)
+	doc, err := l.load(schURL)
+	if err != nil {
+		return nil, err
+	}
+	return draft.getVocabs(schURL, doc, vocabularies)
 }
 
 // --

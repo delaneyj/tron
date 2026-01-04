@@ -6,6 +6,7 @@ require (
 	github.com/delaneyj/toolbelt v0.7.6
 	github.com/fxamacker/cbor/v2 v2.6.0
 	github.com/minio/simdjson-go v0.4.5
+	golang.org/x/net v0.48.0
 	golang.org/x/text v0.32.0
 )
 
@@ -24,7 +25,7 @@ require (
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	golang.org/x/exp v0.0.0-20251125195548-87e1e737ad39 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/sys v0.39.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 	modernc.org/libc v1.67.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

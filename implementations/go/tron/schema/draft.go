@@ -24,6 +24,50 @@ func (d *Draft) String() string {
 }
 
 var (
+	Draft2019 = &Draft{
+		version: 2019,
+		url:     "https://json-schema.org/draft/2019-09/schema",
+		id:      "$id",
+		subschemas: []SchemaPath{
+			// type agnostic
+			schemaPath("definitions/*"),
+			schemaPath("$defs/*"),
+			schemaPath("not"),
+			schemaPath("allOf/[]"),
+			schemaPath("anyOf/[]"),
+			schemaPath("oneOf/[]"),
+			schemaPath("if"),
+			schemaPath("then"),
+			schemaPath("else"),
+			// object
+			schemaPath("properties/*"),
+			schemaPath("additionalProperties"),
+			schemaPath("patternProperties/*"),
+			schemaPath("dependencies/*"),
+			schemaPath("dependentSchemas/*"),
+			schemaPath("propertyNames"),
+			schemaPath("unevaluatedProperties"),
+			// array
+			schemaPath("items"),
+			schemaPath("items/[]"),
+			schemaPath("additionalItems"),
+			schemaPath("contains"),
+			schemaPath("unevaluatedItems"),
+			// content
+			schemaPath("contentSchema"),
+		},
+		vocabPrefix: "https://json-schema.org/draft/2019-09/vocab/",
+		allVocabs: map[string]*Schema{
+			"core":       nil,
+			"applicator": nil,
+			"validation": nil,
+			"meta-data":  nil,
+			"format":     nil,
+			"content":    nil,
+		},
+		defaultVocabs: []string{"core", "applicator", "validation"},
+	}
+
 	Draft2020 = &Draft{
 		version: 2020,
 		url:     "https://json-schema.org/draft/2020-12/schema",
@@ -77,9 +121,11 @@ var (
 func init() {
 	c := NewCompiler()
 	c.AssertFormat()
-	Draft2020.sch = c.MustCompile(Draft2020.url)
-	for name := range Draft2020.allVocabs {
-		Draft2020.allVocabs[name] = c.MustCompile(strings.TrimSuffix(Draft2020.url, "schema") + "meta/" + name)
+	for _, d := range []*Draft{Draft2019, Draft2020} {
+		d.sch = c.MustCompile(d.url)
+		for name := range d.allVocabs {
+			d.allVocabs[name] = c.MustCompile(strings.TrimSuffix(d.url, "schema") + "meta/" + name)
+		}
 	}
 }
 
@@ -95,6 +141,8 @@ func draftFromURL(url string) *Draft {
 	switch u {
 	case "json-schema.org/schema":
 		return draftLatest
+	case "json-schema.org/draft/2019-09/schema":
+		return Draft2019
 	case "json-schema.org/draft/2020-12/schema":
 		return Draft2020
 	default:
