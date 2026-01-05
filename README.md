@@ -87,14 +87,14 @@ See [`SPEC.md`](SPEC.md) for the draft binary format and [`PRIMER.md`](PRIMER.md
 
 Implementation repos live alongside this one and use `tron-shared` as a submodule for shared fixtures.
 
-| Feature | tron-go | tron-ts |
+| Feature | [tron-go](https://github.com/starfederation/tron-go) | [tron-ts](https://github.com/starfederation/tron-ts) |
 | --- | --- | --- |
-| Core encode/decode (scalar + tree) | Yes | Yes |
-| JSON interop (`fromJSON`/`toJSON`) | Yes | Yes |
-| Copy-on-write update helpers | Yes | No |
-| JMESPath queries | Yes | No |
-| JSON Merge Patch (RFC 7386) | Yes | No |
-| JSON Schema validation (draft 2020-12) | Yes | No |
+| Core encode/decode (scalar + tree) | ✅ | ✅ |
+| JSON interop (`fromJSON`/`toJSON`) | ✅ | ✅ |
+| Copy-on-write update helpers | ✅ | ❌ |
+| JMESPath queries | ✅ | ❌ |
+| JSON Merge Patch (RFC 7386) | ✅ | ❌ |
+| JSON Schema validation (draft 2020-12) | ✅ | ❌ |
 
 Shared fixtures: add this repo as a `tron-shared` submodule to consume `shared/testdata` and `shared/metaschemas`.
 
