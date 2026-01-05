@@ -1,10 +1,12 @@
 # TRie Object Notation (TRON)
 
+![TRON logo](assets/logo.png)
+
 TRie Object Notation (TRON) is a binary format intended to be compatible with JSON primitives while using HAMT (for maps) and vector tries (for arrays) to support fast copy-on-write updates without rewriting the entire document. It targets wire use and embedding as a blob in a JSON column or KV store, not a full database or storage engine.
 
 The name emphasizes the trie-based layout used for maps and arrays.
 
-This repository hosts the evolving spec and a reference implementation in Go.
+This repository hosts the evolving spec, documentation, and shared fixtures. The Go and TypeScript implementations live in sibling repos (`tron-go`, `tron-ts`) and consume this repo as a git submodule for shared assets.
 
 ## Features
 
@@ -14,7 +16,6 @@ This repository hosts the evolving spec and a reference implementation in Go.
 - Random access without decoding the full document.
 - Efficient map/array updates via HAMT + vector trie nodes.
 - Stream-friendly: read nodes as needed from a byte slice.
-- Go reference implementation includes JSON Merge Patch and JMESPath-style queries.
 
 ## Status
 
@@ -22,7 +23,7 @@ Work in progress. Expect breaking changes as the spec solidifies.
 
 ## Benchmarks
 
-GeoJSON fixture: `implementations/go/tron/testdata/geojson_large.json`. Command: `go test -bench . -benchmem -run=^$ ./...` (run in `implementations/go/tron`) on AMD Ryzen 9 6900HX. Size columns are KB (1024 bytes); zstd uses default settings.
+GeoJSON fixture: `shared/testdata/geojson_large.json`. Command: `go test -bench . -benchmem -run=^$ ./...` (run in `../tron-go`) on AMD Ryzen 9 6900HX. Size columns are KB (1024 bytes); zstd uses default settings.
 
 **decode + read**
 | Format | ns/op | MB/s | B/op | allocs/op | size (KB) | zstd (KB) |
@@ -80,14 +81,22 @@ TRON was inspired by conversations with the lite3.io author. Those exchanges hel
 
 ## Spec
 
-See `SPEC.md` for the draft binary format and `PRIMER.md` for a HAMT/vector trie overview.
+See [`SPEC.md`](SPEC.md) for the draft binary format and [`PRIMER.md`](PRIMER.md) for a HAMT/vector trie overview.
 
-## Reference implementation
+## Implementations
 
-The Go implementation lives under `implementations/go/tron` (module `tron`) and tracks the spec as it evolves.
+Implementation repos live alongside this one and use `tron-shared` as a submodule for shared fixtures.
 
-Path queries (JMESPath-style) live under `implementations/go/tron/path`.
-JSON Merge Patch (RFC 7386) lives under `implementations/go/tron/merge`.
+| Feature | tron-go | tron-ts |
+| --- | --- | --- |
+| Core encode/decode (scalar + tree) | Yes | Yes |
+| JSON interop (`fromJSON`/`toJSON`) | Yes | Yes |
+| Copy-on-write update helpers | Yes | No |
+| JMESPath queries | Yes | No |
+| JSON Merge Patch (RFC 7386) | Yes | No |
+| JSON Schema validation (draft 2020-12) | Yes | No |
+
+Shared fixtures: add this repo as a `tron-shared` submodule to consume `shared/testdata` and `shared/metaschemas`.
 
 ## Contributing
 

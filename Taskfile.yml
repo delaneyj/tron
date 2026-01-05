@@ -1,7 +1,7 @@
 version: "3"
 
 vars:
-  GO_DIR: implementations/go/tron
+  GO_DIR: ../tron-go
 
 tasks:
   test:

@@ -193,4 +193,4 @@ Copy-on-write updates:
 - Only the nodes along the modified path are re-encoded.
 - The root trailer points at the newest root; older nodes remain for history.
 
-See `SPEC.md` for full byte layouts and canonicalization rules.
+See [`SPEC.md`](SPEC.md) for full byte layouts and canonicalization rules.

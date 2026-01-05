@@ -191,7 +191,7 @@ xxh32(data, seed):
 
 All arithmetic is modulo 2^32. `read_u32_le` reads 4 bytes little-endian.
 
-Reference implementation: xxh32 MUST match Cyan4973/xxHash (release branch). Canonical test vectors are available in `test_vectors/xxhash_sanity_test_vectors.json`, derived from `tests/sanity_test_vectors.h` in that repo.
+Reference implementation: xxh32 MUST match Cyan4973/xxHash (release branch). Canonical test vectors are available in `shared/testdata/vectors/xxhash_sanity_test_vectors.json`, derived from `tests/sanity_test_vectors.h` in that repo.
 
 Branch node layout (map):
 
@@ -580,3 +580,14 @@ Notes:
 
 - The `b64:` prefix is reserved for binary encoding in JSON. If a string
   begins with `b64:` but is not valid base64, it remains a `txt` string.
+
+## Optional addendum: implementation features
+
+The following features are not required for core TRON format compatibility.
+They are documented here because some implementations (for example, the Go
+implementation) provide them.
+
+- TRON Patch: apply RFC 7386 JSON Merge Patch semantics to TRON documents and
+  return an updated TRON document without a full decode/encode cycle.
+- JMESPath queries: evaluate JMESPath-style expressions directly against TRON
+  documents and return TRON values.
