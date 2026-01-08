@@ -8,6 +8,7 @@
 | 3        | 2026-01-05 | @delaneyj                 | Add JSON Merge Patch and JMESPath |
 | 4        | 2026-01-08 | @oliverlambson            | Annotate byte-level TRON example  |
 | 5        | 2026-01-08 | @oliverlambson            | Reserve full u32 for HAMT bitmap  |
+| 6        | 2026-01-08 | @oliverlambson            | Revise value tag header format    |
 
 This document defines the binary format for TRie Object Notation. It is intended to be compatible with JSON primitives while using HAMT (for maps) and vector tries (for arrays) to support fast in-place modifications without rewriting the entire document. The format targets transport and embedding as a single blob in databases or KV stores, not a database or storage engine itself.
 
@@ -61,12 +62,20 @@ Each value record begins with a 1-byte tag header. The top 3 bits encode the typ
 | Field         | Bits            |
 | ------------- | --------------- |
 | Bit positions | 7 6 5 4 3 2 1 0 |
-| Meaning       | T T T x x x x x |
+| Meaning       | x x x x x T T T |
 
 - `TTT`: type (0-7)
 - `x`: type-specific bits
 
-Packing rules: for `txt`, `bin`, `arr`, and `map`, bit 4 of the low 5 bits is the isPacked flag. If isPacked=1, the low 4 bits hold the inline length 0..15. If isPacked=0, the low 4 bits (N) are the number of bytes that follow to encode the payload length; N must be 1..8. Read N bytes (little-endian) to get L. For `txt`/`bin`, L is the byte length of the payload that follows. For `arr`/`map`, L must be 1..4. `i64` and `f64` do not use packing; their low 5 bits must be 0.
+**Packing rules:**
+
+`nil`, `i64` and `f64` do not use any packing, the high 5 bits must be 0.
+
+`bit` packs the boolean value into bit 3, the high 4 bits must be 0.
+
+`txt` and `bin` use all 5 high bits: bit 3 is the isPacked flag. If isPacked=1, the high 4 bits hold the inline length 0..15. If isPacked=0, the high 4 bits (N) are the number of bytes that follow to encode the payload length; N must be 1..8. Read N bytes (little-endian) to get L. L is the byte length of the payload that follows.
+
+`arr` and `map` use bit 3 and 4 encode M, where M+1 is the byte length of the payload that follows, the high 4 bits must be 0.
 
 Type layouts and examples:
 
@@ -78,48 +87,48 @@ Example: `0x00`
 
 ### bit (0b001)
 
-Tag bits: `0010000b` where `b` is the value bit (0=false, 1=true). Other low bits must be 0. Represents JSON boolean.
+Tag bits: `0000b001` where `b` is the value bit (0=false, 1=true). Other low bits must be 0. Represents JSON boolean.
 
 Examples:
 
-- false: `0x20`
-- true: `0x21`
+- false: `0x01`
+- true: `0x09`
 
 ### i64 (0b010)
 
-Tag bits: `01000000` (0x40). Payload is fixed 8-byte two's complement, little-endian. Used for JSON numbers that fit in i64.
+Tag bits: `00000010` (0x02). Payload is fixed 8-byte two's complement, little-endian. Used for JSON numbers that fit in i64.
 
-Example: 1234 -> tag `0x40`, payload `0xD2 0x04 0x00 0x00 0x00 0x00 0x00 0x00`
+Example: 1234 -> tag `0x02`, payload `0xD2 0x04 0x00 0x00 0x00 0x00 0x00 0x00`
 
 ### f64 (0b011)
 
-Tag bits: `01100000` (0x60). Payload is fixed 8-byte IEEE-754 binary64, little-endian. Used for JSON numbers that do not fit in i64.
+Tag bits: `00000011` (0x03). Payload is fixed 8-byte IEEE-754 binary64, little-endian. Used for JSON numbers that do not fit in i64.
 
-Example: 1.5 -> tag `0x60`, payload `0x00 0x00 0x00 0x00 0x00 0x00 0xF8 0x3F`
+Example: 1.5 -> tag `0x03`, payload `0x00 0x00 0x00 0x00 0x00 0x00 0xF8 0x3F`
 
 ### txt (0b100)
 
-Tag bits: `100Pllll` where `P` is isPacked and `llll` is inline length or N. Payload is always a UTF-8 encoded string of length L.
+Tag bits: `llllP100` where `P` is isPacked and `llll` is inline length or N. Payload is always a UTF-8 encoded string of length L.
 
-Example: "hi" (inline length 2) -> tag `0x92`, payload `0x68 0x69`
+Example: "hi" (inline length 2) -> tag `0x2C`, payload `0x68 0x69`
 
 ### bin (0b101)
 
-Tag bits: `101Pllll` where `P` is isPacked and `llll` is inline length or N. Payload is raw bytes of length L.
+Tag bits: `llllP101` where `P` is isPacked and `llll` is inline length or N. Payload is raw bytes of length L.
 
-Example: 3 bytes `0xAA 0xBB 0xCC` -> tag `0xB3`, payload `0xAA 0xBB 0xCC`
+Example: 3 bytes `0xAA 0xBB 0xCC` -> tag `0x3D`, payload `0xAA 0xBB 0xCC`
 
 ### arr (0b110)
 
-Tag bits: `110Pllll` where `P` is isPacked and `llll` is inline length or N. Payload is a node offset (u32) encoded in L bytes (1..4), little-endian.
+Tag bits: `000ll110` where `ll + 1` is payload length. Payload is a node offset (u32) encoded in L+1 bytes (1..4), little-endian.
 
-Example: root node at offset `0x10` -> tag `0xD1`, payload `0x10`
+Example: root node at offset `0x10` -> tag `0x06`, payload `0x10`
 
 ### map (0b111)
 
-Tag bits: `111Pllll` where `P` is isPacked and `llll` is inline length or N. Payload is a node offset (u32) encoded in L bytes (1..4), little-endian.
+Tag bits: `000ll111` where `ll + 1` is payload length. Payload is a node offset (u32) encoded in L+1 bytes (1..4), little-endian.
 
-Example: root node at offset `0x20` -> tag `0xF1`, payload `0x20`
+Example: root node at offset `0x20` -> tag `0x07`, payload `0x20`
 
 ## 5. HAMT (map) and vector trie (arr) nodes
 
@@ -552,8 +561,8 @@ TRON bytes (hex, offsets at left):
 // node: R.e[0].entry[0]
 0000: 1B 00 00 00                       kind=1=leaf; key_type=1=map; len=0b11000=24
 0004: 01 00 00 00                       entry_count=1
-0008: 95 76 61 6C 75 65                 key="value"::txt
-000E: 40 01 00 00 00 00 00 00 00 00     value=1::i64
+0008: 5C 76 61 6C 75 65                 key="value"::txt
+000E: 02 01 00 00 00 00 00 00 00 00     value=1::i64
 // node: R.e[0].e[1].value["path"]
 0018: 1D 00 00 00                       kind=1=leaf; key_type=0=arr; len=0b11100=28
 001C: 02 00 00 00                       entry_count=2
@@ -561,19 +570,19 @@ TRON bytes (hex, offsets at left):
 0021: 00                                reserved
 0022: 03 00                             bitmap=0b11
 0024: 02 00 00 00                       length=2
-0028: 91 61                             "a"::txt
-002A: 40 00 00 00 00 00 00 00 00 00     0::i64
+0028: 1C 61                             "a"::txt
+002A: 02 00 00 00 00 00 00 00 00 00     0::i64
 // node: R.e[0].entry[1]
 0034: 13 00 00 00                       kind=1=leaf; key_type=1=map; len=0b10000=16
 0038: 01 00 00 00                       entry_count=1
-003C: 94 70 61 74 68                    key="path"::txt
-0041: D1 18                             value=arr @18
+003C: 4C 70 61 74 68                    key="path"::txt
+0041: 06 18                             value=arr @18
 0043: 00                                zero padding
 // node: R.e[0].entry[2]
 0044: 17 00 00 00                       key=1=leaf; key_type=1=map; len=0b10100=20
 0048: 01 00 00 00                       entry_count=1
-004C: 92 6F 70                          key="op"::txt
-004F: 40 00 00 00 00 00 00 00 00        value=0::i64
+004C: 2C 6F 70                          key="op"::txt
+004F: 02 00 00 00 00 00 00 00 00        value=0::i64
 // node: R.entry[0]
 0058: 1A 00 00 00                       kind=0=branch; key_type=1=map; len=0b11000=24
 005C: 03 00 00 00                       entry_count=3
@@ -584,8 +593,8 @@ TRON bytes (hex, offsets at left):
 // node: R.e[1].entry[0]
 0070: 17 00 00 00                       kind=1=leaf; key_type=1=map; len=0b10100=20
 0074: 01 00 00 00                       entry_count=1
-0078: 95 76 61 6C 75 65                 key="value"::txt
-007E: 92 68 69                          value="hi"::txt
+0078: 5C 76 61 6C 75 65                 key="value"::txt
+007E: 2C 68 69                          value="hi"::txt
 0082: 00 00 00                          zero padding
 // node: R.e[1].e[1].value["path"]
 0084: 15 00 00 00                       kind=1=leaf; key_type=0=arr; len=0b10100=20
@@ -594,19 +603,19 @@ TRON bytes (hex, offsets at left):
 008D: 00                                reserved
 008E: 01 00                             bitmap=0b1
 0090: 01 00 00 00                       length=1
-0094: 91 62                             "b"::txt
+0094: 1C 62                             "b"::txt
 0096: 00 00                             zero padding
 // node: R.e[1].entry[1]
 0098: 13 00 00 00                       kind=1=leaf; key_type=1=map; len=0b10000=16
 009C: 01 00 00 00                       entry_count=1
-00A0: 94 70 61 74 68                    key="path"::txt
-00A5: D1 84                             value=arr @0084
+00A0: 4C 70 61 74 68                    key="path"::txt
+00A5: 06 84                             value=arr @0084
 00A7: 00                                zero padding
 // node: R.e[1].entry[2]
 00A8: 17 00 00 00                       kind=1=leaf; key_type=1=map; len=0b10100=20
 00AC: 01 00 00 00                       entry_count=1
-00B0: 92 6F 70                          key="op"::txt
-00B3: 40 02 00 00 00 00 00 00 00        value=2::i64
+00B0: 2C 6F 70                          key="op"::txt
+00B3: 02 02 00 00 00 00 00 00 00        value=2::i64
 // node: R.entry[1]
 00BC: 1A 00 00 00                       kind=0=branch; key_type=1=map; len=0b11000=24
 00C0: 03 00 00 00                       entry_count=3
