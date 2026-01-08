@@ -1,5 +1,13 @@
 # TRie Object Notation (TRON) Spec (draft)
 
+| Revision | Date       | Author                    | Info                              |
+| -------- | ---------- | ------------------------- | --------------------------------- |
+| 0        | 2025-12-30 | @delaneyj                 | Initial design                    |
+| 1        | 2026-01-04 | @delaneyj                 | Add JSON mapping                  |
+| 2        | 2026-01-04 | @delaneyj, @oliverlambson | Fix xxh32 spec                    |
+| 3        | 2026-01-05 | @delaneyj                 | Add JSON Merge Patch and JMESPath |
+| 4        | 2026-01-08 | @oliverlambson            | Annotate byte-level TRON example  |
+
 This document defines the binary format for TRie Object Notation. It is intended to be compatible with JSON primitives while using HAMT (for maps) and vector tries (for arrays) to support fast in-place modifications without rewriting the entire document. The format targets transport and embedding as a single blob in databases or KV stores, not a database or storage engine itself.
 
 ## 1. Document layout
@@ -512,39 +520,114 @@ Complexity:
 
 - O(k * d) for k updated keys and depth d in the map trie, with structural reuse of unchanged subtrees.
 
-Byte-level example (canonical TRON tree document):
+## Byte-level example (canonical TRON tree document)
+
+Encode this JSON patch instruction in TRON:
 
 - JSON Patch:
   - add /a/0 = 1
   - replace /b = "hi"
 
-- TRON bytes (hex, offsets at left):
-
-```
-0000: 1B 00 00 00 01 00 00 00 95 76 61 6C 75 65 40 01
-0010: 00 00 00 00 00 00 00 00 1D 00 00 00 02 00 00 00
-0020: 00 00 03 00 02 00 00 00 91 61 40 00 00 00 00 00
-0030: 00 00 00 00 13 00 00 00 01 00 00 00 94 70 61 74
-0040: 68 D1 18 00 17 00 00 00 01 00 00 00 92 6F 70 40
-0050: 00 00 00 00 00 00 00 00 1A 00 00 00 03 00 00 00
-0060: 41 08 00 00 00 00 00 00 34 00 00 00 44 00 00 00
-0070: 17 00 00 00 01 00 00 00 95 76 61 6C 75 65 92 68
-0080: 69 00 00 00 15 00 00 00 01 00 00 00 00 00 01 00
-0090: 01 00 00 00 91 62 00 00 13 00 00 00 01 00 00 00
-00A0: 94 70 61 74 68 D1 84 00 17 00 00 00 01 00 00 00
-00B0: 92 6F 70 40 02 00 00 00 00 00 00 00 1A 00 00 00
-00C0: 03 00 00 00 41 08 00 00 70 00 00 00 98 00 00 00
-00D0: A8 00 00 00 15 00 00 00 02 00 00 00 00 00 03 00
-00E0: 02 00 00 00 F1 58 F1 BC D4 00 00 00 00 00 00 00
-00F0: 56 4E 54 58
+```json
+[
+  {
+    "value": 1,
+    "path": ["a", 0],
+    "op": 0
+  },
+  {
+    "value": "hi",
+    "path": ["b"],
+    "op": 2
+  }
+]
 ```
 
-Trailer (last 12 bytes):
+_Note that in the representation of the json patch above, the paths have been
+split and the ops have been enumerated._
 
-- root offset = `0x000000D4`
-- prev root offset = 0
-- magic = `TRON`
-  - trailer starts at offset `0x00E8` in this example
+TRON bytes (hex, offsets at left):
+
+```
+// node: R.e[0].entry[0]
+0000: 1B 00 00 00                       kind=1=leaf; key_type=1=map; len=0b11000=24
+0004: 01 00 00 00                       entry_count=1
+0008: 95 76 61 6C 75 65                 key="value"::txt
+000E: 40 01 00 00 00 00 00 00 00 00     value=1::i64
+// node: R.e[0].e[1].value["path"]
+0018: 1D 00 00 00                       kind=1=leaf; key_type=0=arr; len=0b11100=28
+001C: 02 00 00 00                       entry_count=2
+0020: 00                                shift=0
+0021: 00                                reserved
+0022: 03 00                             bitmap=0b11
+0024: 02 00 00 00                       length=2
+0028: 91 61                             "a"::txt
+002A: 40 00 00 00 00 00 00 00 00 00     0::i64
+// node: R.e[0].entry[1]
+0034: 13 00 00 00                       kind=1=leaf; key_type=1=map; len=0b10000=16
+0038: 01 00 00 00                       entry_count=1
+003C: 94 70 61 74 68                    key="path"::txt
+0041: D1 18                             value=arr @18
+0043: 00                                zero padding
+// node: R.e[0].entry[2]
+0044: 17 00 00 00                       key=1=leaf; key_type=1=map; len=0b10100=20
+0048: 01 00 00 00                       entry_count=1
+004C: 92 6F 70                          key="op"::txt
+004F: 40 00 00 00 00 00 00 00 00        value=0::i64
+// node: R.entry[0]
+0058: 1A 00 00 00                       kind=0=branch; key_type=1=map; len=0b11000=24
+005C: 03 00 00 00                       entry_count=3
+0060: 41 08 00 00                       bitmap=0b100001000001
+0064: 00 00 00 00                       entry[0] offset = @0000
+0068: 34 00 00 00                       entry[1] offset = @0034
+006C: 44 00 00 00                       entry[2] offset = @0044
+// node: R.e[1].entry[0]
+0070: 17 00 00 00                       kind=1=leaf; key_type=1=map; len=0b10100=20
+0074: 01 00 00 00                       entry_count=1
+0078: 95 76 61 6C 75 65                 key="value"::txt
+007E: 92 68 69                          value="hi"::txt
+0082: 00 00 00                          zero padding
+// node: R.e[1].e[1].value["path"]
+0084: 15 00 00 00                       kind=1=leaf; key_type=0=arr; len=0b10100=20
+0088: 01 00 00 00                       entry_count=1
+008C: 00                                shift=8
+008D: 00                                reserved
+008E: 01 00                             bitmap=0b1
+0090: 01 00 00 00                       length=1
+0094: 91 62                             "b"::txt
+0096: 00 00                             zero padding
+// node: R.e[1].entry[1]
+0098: 13 00 00 00                       kind=1=leaf; key_type=1=map; len=0b10000=16
+009C: 01 00 00 00                       entry_count=1
+00A0: 94 70 61 74 68                    key="path"::txt
+00A5: D1 84                             value=arr @0084
+00A7: 00                                zero padding
+// node: R.e[1].entry[2]
+00A8: 17 00 00 00                       kind=1=leaf; key_type=1=map; len=0b10100=20
+00AC: 01 00 00 00                       entry_count=1
+00B0: 92 6F 70                          key="op"::txt
+00B3: 40 02 00 00 00 00 00 00 00        value=2::i64
+// node: R.entry[1]
+00BC: 1A 00 00 00                       kind=0=branch; key_type=1=map; len=0b11000=24
+00C0: 03 00 00 00                       entry_count=3
+00C4: 41 08 00 00                       bitmap=0b100001000001
+00C8: 70 00 00 00                       entry[0] offset = @0070
+00CC: 98 00 00 00                       entry[1] offset = @0098
+00D0: A8 00 00 00                       entry[2] offset = @00A8
+// node: Root
+00D4: 15 00 00 00                       kind=1=leaf; key_type=0=arr; len=0b10100=20
+00D8: 02 00 00 00                       entry_count=2
+00DC: 00                                shift=0
+00DD: 00                                reserved
+00DE: 30 00                             bitmap=0b11
+00E0: 02 00 00 00                       length
+00E4: F1 58                             entry[0] offset = @0058
+00E6: F1 BC                             entry[1] offset = @00BC
+// trailer
+00E8: D4 00 00 00                       root offset = @00D4
+00EC: 00 00 00 00                       prev root offset = 0 (i.e., this is canonical enc.)
+00F0: 56 4E 54 58                       magic "TRON" (i.e., this is a tree document)
+```
 
 ## JSON mapping
 
