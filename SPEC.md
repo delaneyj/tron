@@ -7,6 +7,7 @@
 | 2        | 2026-01-04 | @delaneyj, @oliverlambson | Fix xxh32 spec                    |
 | 3        | 2026-01-05 | @delaneyj                 | Add JSON Merge Patch and JMESPath |
 | 4        | 2026-01-08 | @oliverlambson            | Annotate byte-level TRON example  |
+| 5        | 2026-01-08 | @oliverlambson            | Reserve full u32 for HAMT bitmap  |
 
 This document defines the binary format for TRie Object Notation. It is intended to be compatible with JSON primitives while using HAMT (for maps) and vector tries (for arrays) to support fast in-place modifications without rewriting the entire document. The format targets transport and embedding as a single blob in databases or KV stores, not a database or storage engine itself.
 
@@ -205,8 +206,7 @@ Branch node layout (map):
 
 ```
 Offset  Size  Field
-8       2     Bitmap (u16)
-10      2     Reserved (u16) = 0
+8       4     Bitmap (u32) - note since there are max 16 slots, the upper 2 bytes are always 0
 12      4*n   Child offsets (u32), ordered by slot index
 ```
 
@@ -518,7 +518,7 @@ Rules:
 
 Complexity:
 
-- O(k * d) for k updated keys and depth d in the map trie, with structural reuse of unchanged subtrees.
+- O(k \* d) for k updated keys and depth d in the map trie, with structural reuse of unchanged subtrees.
 
 ## Byte-level example (canonical TRON tree document)
 
