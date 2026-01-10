@@ -72,7 +72,7 @@ Each node begins with a 1-byte tag header. The top 3 bits encode the type, the l
 
 `txt` and `bin` use all 5 high bits: bit 3 is the isPacked flag. If isPacked=1, the high 4 bits hold the inline length 0..15. If isPacked=0, the high 4 bits (N) are the number of bytes that follow to encode the payload length; N must be 1..8. Read N bytes (little-endian) to get L. L is the byte length of the payload that follows.
 
-`arr` and `map` use bits 3-4 to encode M, and bit 3 is the branch/leaf flag (B). The M+1 bytes following the tag store node_len, the total size of the node in bytes (including tag and length field). The high 2 bits must be 0.
+`arr` and `map` use bits 4-5 to encode M, and bit 3 is the branch/leaf flag (B). The M+1 bytes following the tag store node_len, the total size of the node in bytes (including tag and length field). For arr, bit 6 is the root/child flag (R). For map, the high 2 bits must be 0.
 
 Type layouts and examples:
 
@@ -119,13 +119,13 @@ Example: 3 bytes `0xAA 0xBB 0xCC` -> tag `0x3D`, payload `0xAA 0xBB 0xCC`
 
 Tag bits: `0RMMB110` where `R` is root arr node flag (0=root, 1=child), `B` is branch/leaf flag (0=branch, 1=leaf). Payload is: node length encoded in `MM + 1` bytes; shift (u8); bitmap (u16); if root: length of arr (u32); if branch: u32 LE addresses of leaf nodes (`entry_count` \* 4 bytes); if leaf: u32 LE addresses of value nodes (`entry_count` \* 4 bytes). Where `entry_count = popcount(bitmap)`.
 
-Example: leaf arr with one value node at address `0x10` -> tag `0x0E`, payload `0x0D 0x01 0x10 0x00 0x00 0x10 0x00 0x00 0x00`
+Example: leaf root arr with one value node at address `0x10` -> tag `0x0E`, payload `0x0D 0x00 0x01 0x00 0x01 0x00 0x00 0x00 0x10 0x00 0x00 0x00`
 
 ### map (0b111)
 
 Tag bits: `00MMB111` where `B` is branch/leaf flag (0=branch, 1=leaf). Payload is: length encoded in `MM + 1` bytes; if branch: bitmap (u32) and u32 LE addresses of child nodes (entry_count \* 4 bytes); if leaf: u32 LE addresses of key/value pairs (2 \* n_kv_pairs \* 4 bytes). Where `entry_count = popcount(bitmap)`.
 
-Example: leaf map with key node at address `0x20` and value node at address `0x30` -> tag `0x0F`, payload `0x0E 0x01 0x00 0x00 0x00 0x20 0x00 0x00 0x00 0x30 0x00 0x00 0x00`
+Example: leaf map with key node at address `0x20` and value node at address `0x30` -> tag `0x0F`, payload `0x0E 0x20 0x00 0x00 0x00 0x30 0x00 0x00 0x00`
 
 ## 5. HAMT (map) and vector trie (arr) nodes
 

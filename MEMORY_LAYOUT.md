@@ -148,11 +148,12 @@ Node tag header byte:
 ### Type Encoding: arr, map
 
 ```
-00 MM B 11T
-   │  │   │
-   │  │   └─ 0=arr; 1=map
-   │  └─ 0=branch; 1=leaf
-   └─ number of bytes after header for L (u32)
+0 0/R MM B 11T
+   │ │  │   │
+   │ │  │   └─ 0=arr; 1=map
+   │ │  └─ 0=branch; 1=leaf
+   │ └─ number of bytes after header for L (u32)
+   └─ if map: always 0; if arr: 0=root, 1=child
 ```
 
 ### Examples
@@ -167,7 +168,7 @@ txt "ab":       0x2C 61 62                     (packed len=2)
 txt (long):     0x14 20 <32 bytes...>          (unpacked, 1-byte len=32)
 bin 0xDDEEFF:   0x3D DD EE FF                  (packed len=3)
 bin (long):     0x25 00 01 <256 bytes...>      (unpacked, 2-byte len=256)
-arr:            0x0C 0D 00 00 00 00 00 00 00   (empty leaf, 9 bytes)
+arr (root):     0x0E 09 00 00 00 00 00 00 00   (empty root leaf, 9 bytes)
 map:            0x06 06                        (empty leaf, 2 bytes)
 ```
 
@@ -308,7 +309,7 @@ slot = (index >> shift) & 0xF
 The root shift is chosen so `max_index >> shift <= 0xF`. Each depth down from
 the root, the shift is decreased by 4.
 
-### Branch Node Layout
+### Root Arr Branch Node Layout (R=0)
 
 | Offset | Size   | Field                                                  |
 | ------ | ------ | ------------------------------------------------------ |
@@ -316,10 +317,10 @@ the root, the shift is decreased by 4.
 | 1      | M+1    | Node length                                            |
 | M+2    | 1      | Shift (u8)                                             |
 | M+3    | 2      | Bitmap (u16 LE)                                        |
-| M+5    | 4      | Length (u32 LE)                                        |
+| M+5    | 4      | Length (u32 LE) - array length                         |
 | M+9    | 4 \* n | Addresses of child nodes (u32 LE each), in slot order. |
 
-### Leaf Node Layout
+### Root Arr Leaf Node Layout (R=0)
 
 | Offset | Size   | Field                                                   |
 | ------ | ------ | ------------------------------------------------------- |
@@ -327,23 +328,33 @@ the root, the shift is decreased by 4.
 | 1      | M+1    | Node length                                             |
 | M+2    | 1      | Shift (u8)                                              |
 | M+3    | 2      | Bitmap (u16 LE)                                         |
-| M+5    | 4      | Length (u32 LE)                                         |
+| M+5    | 4      | Length (u32 LE) - array length                          |
 | M+9    | 4 \* n | Addresses of value nodes (u32 LE, each), in slot order. |
 
-**Length field:** Only meaningful in the root node (stores array length, valid
-indices are `0..length-1`). Non-root nodes must store 0.
+### Child Arr Branch/Leaf Node Layout (R=1)
 
-### Example: Array Leaf
+| Offset | Size   | Field                                                   |
+| ------ | ------ | ------------------------------------------------------- |
+| 0      | 1      | Node tag header                                         |
+| 1      | M+1    | Node length                                             |
+| M+2    | 1      | Shift (u8)                                              |
+| M+3    | 2      | Bitmap (u16 LE)                                         |
+| M+5    | 4 \* n | Addresses of child/value nodes (u32 LE), in slot order. |
+
+**Note:** Only root nodes (R=0) include the 4-byte length field. Child nodes
+(R=1) omit it entirely.
+
+### Example: Array Root Leaf
 
 ```
-Address 0x00ED:
-  0E             type=arr; B=1=leaf; M=0 (0b00_00_1_110)
+Address 0x2E:
+  0E             type=arr; R=0=root; B=1=leaf; M=0 (0b0_0_00_1_110)
   11             node_len=17 (total node size)
   00             shift=0
   03 00          bitmap=0b11 (slots 0,1)
   02 00 00 00    length=2
-  6A 00 00 00    entry[0] address = @006A
-  D7 00 00 00    entry[1] address = @00D7
+  1C 00 00 00    entry[0] address = @001C
+  25 00 00 00    entry[1] address = @0025
 ```
 
 ---
@@ -363,19 +374,19 @@ This section shows the complete memory layout of a tree document representing:
 
 ```mermaid
 flowchart TB
-      root["Map Branch (Root)<br/>0x00<br/>bitmap: 0x0022<br/>(0b00000000 00100010)<br/>slots occupied: 5, 1<br/>entry0 → @0x10<br/>entry1 → @0x20"]
+      root["Map Branch (Root)<br/>0x49<br/>bitmap: 0x0022<br/>(0b00000000 00100010)<br/>slots occupied: 1, 5<br/>child[0] → @0x0B<br/>child[1] → @0x3F"]
 
-      leaf1["Map Leaf (slot 1)<br/>0x10<br/>key0 → @0x30<br/>val0 → @0x40"]
-      leaf5["Map Leaf (slot 5)<br/>0x20<br/>key0 → @0x50<br/>val0 → @0x60"]
+      leaf1["Map Leaf (slot 1)<br/>0x0B<br/>key0 → @0x00<br/>val0 → @0x05"]
+      leaf5["Map Leaf (slot 5)<br/>0x3F<br/>key0 → @0x15<br/>val0 → @0x2E"]
 
-      str_name["String<br/>0x30<br/>&quot;name&quot;"]
-      str_alice["String<br/>0x40<br/>&quot;alice&quot;"]
+      str_name["String<br/>0x00<br/>&quot;name&quot;"]
+      str_alice["String<br/>0x05<br/>&quot;alice&quot;"]
 
-      str_scores["String<br/>0x50<br/>&quot;scores&quot;"]
-      arr["Array Leaf<br/>0x60<br/>[0] → int @0x70<br/>[1] → int @0x80"]
+      str_scores["String<br/>0x15<br/>&quot;scores&quot;"]
+      arr["Array Leaf<br/>0x2E<br/>[0] → int @0x1C<br/>[1] → int @0x25"]
 
-      int10["Int<br/>0x70<br/>10"]
-      int20["Int<br/>0x80<br/>20"]
+      int10["Int<br/>0x1C<br/>10"]
+      int20["Int<br/>0x25<br/>20"]
 
       root --> leaf1
       root --> leaf5
@@ -396,29 +407,29 @@ flowchart TB
 ```
                           ┌──────────────────────────┐
                           │ Map Branch        (Root) │
-                          │ 0x00                     │
+                          │ 0x49                     │
                           │ bitmap: 0x0022           │
                           │    (0b00000000 00100010) │
                           │                  │   │   │
                           │ slots occupied:  5   1   │
-                          │ entry0 → @0x10           │
-                          │ entry1 → @0x20           │
+                          │ child[0] → @0x0B         │
+                          │ child[1] → @0x3F         │
                           └────────────┬─────────────┘
                   ┌────────────────────┴─────────────────────┐
                   ▼                                          ▼
         ┌───────────────────┐                       ┌───────────────────┐
         │ Map Leaf (slot 1) │                       │ Map Leaf (slot 5) │
-        │ 0x10              │                       │ 0x20              │
-        │ key0 → @0x30      │                       │ key0 → @0x50      │
-        │ val0 → @0x40      │                       │ val0 → @0x60      │
+        │ 0x0B              │                       │ 0x3F              │
+        │ key0 → @0x00      │                       │ key0 → @0x15      │
+        │ val0 → @0x05      │                       │ val0 → @0x2E      │
         └─────────┬─────────┘                       └─────────┬─────────┘
         ┌─────────┴─────────┐                      ┌──────────┴─────────┐
         ▼                   ▼                      ▼                    ▼
     ┌────────┐          ┌────────┐             ┌──────────┐    ┌─────────────────┐
     │ String │          │ String │             │ String   │    │ Array Leaf      │
-    │ 0x30   │          │ 0x40   │             │ 0x50     │    │ 0x60            │
-    │ "name" │          │ "alice"│             │ "scores" │    │ [0] → int @0x70 │
-    └────────┘          └────────┘             └──────────┘    │ [1] → int @0x80 │
+    │ 0x00   │          │ 0x05   │             │ 0x15     │    │ 0x2E            │
+    │ "name" │          │ "alice"│             │ "scores" │    │ [0] → int @0x1C │
+    └────────┘          └────────┘             └──────────┘    │ [1] → int @0x25 │
                                                                └────────┬────────┘
                                                                         │
                                                                ┌────────┴───────┐
@@ -426,7 +437,7 @@ flowchart TB
                                                                ▼                ▼
                                                             ┌──────┐         ┌──────┐
                                                             │ Int  │         │ Int  │
-                                                            │ 0x70 │         │ 0x80 │
+                                                            │ 0x1C │         │ 0x25 │
                                                             │ 10   │         │ 20   │
                                                             └──────┘         └──────┘
 ```
@@ -501,7 +512,7 @@ Tag byte encoding reference:
 
 ```
 ┌──────────┐    read trailer     ┌─────────────┐
-│  Start   │ ─────────────────▶  │ root = 0x55 │
+│  Start   │ ─────────────────▶  │ root = 0x49 │
 └──────────┘                     └──────┬──────┘
                                         │
                                         ▼
@@ -520,7 +531,7 @@ Tag byte encoding reference:
                                         │
                                         ▼
         ┌────────────────────────────────────────────────────────────┐
-        │ 2. At Map Leaf 0x47: scan entries for key "scores"         │
+        │ 2. At Map Leaf 0x3F: scan entries for key "scores"         │
         │    Compare key @ 0x15 with "scores" → match!               │
         │    Value addr = 0x2E (array leaf)                          │
         └────────────────────────────────────────────────────────────┘
@@ -563,7 +574,7 @@ Tag byte encoding reference:
 ```
 
 ```
-Before (115 bytes):
+Before (99 bytes):
 ┌─────────┬─────────┬─────────┬──────────┬───────┬───────┬─────────┬──────────┬───────────┬─────────────┐
 │ 0x00    │ 0x05    │ 0x0B    │ 0x15     │ 0x1C  │ 0x25  │ 0x2E    │ 0x3F     │ 0x49      │ 0x57        │
 │ txt     │ txt     │ MapLeaf │ txt      │ i64   │ i64   │ ArrLeaf │ MapLeaf  │ MapBranch │ Root footer │
@@ -743,19 +754,19 @@ branch that delegates to a child node at depth 1. That child is also a branch
 
 ```mermaid
 flowchart TB
-    root["Map Branch (Root)<br/>Depth 0<br/>@0x44<br/>bitmap: 0x0040<br/>(slot 6 occupied)<br/>child[0] → @0x32"]
+    root["Map Branch (Root)<br/>Depth 0<br/>@0x38<br/>bitmap: 0x0040<br/>(slot 6 occupied)<br/>child[0] → @0x2A"]
 
-    branch1["Map Branch<br/>Depth 1<br/>@0x32<br/>bitmap: 0x0030<br/>(slots 4,5 occupied)<br/>child[0] → @0x0B (slot 4)<br/>child[1] → @0x24 (slot 5)"]
+    branch1["Map Branch<br/>Depth 1<br/>@0x2A<br/>bitmap: 0x0030<br/>(slots 4,5 occupied)<br/>child[0] → @0x0B (slot 4)<br/>child[1] → @0x20 (slot 5)"]
 
     leaf_v["Map Leaf<br/>@0x0B<br/>key → @0x00<br/>val → @0x02"]
 
-    leaf_a["Map Leaf<br/>@0x24<br/>key → @0x19<br/>val → @0x1B"]
+    leaf_a["Map Leaf<br/>@0x20<br/>key → @0x15<br/>val → @0x17"]
 
     txt_v["txt &quot;v&quot;<br/>@0x00"]
     i64_2["i64 2<br/>@0x02"]
 
-    txt_a["txt &quot;a&quot;<br/>@0x19"]
-    i64_1["i64 1<br/>@0x1B"]
+    txt_a["txt &quot;a&quot;<br/>@0x15"]
+    i64_1["i64 1<br/>@0x17"]
 
     root --> branch1
     branch1 --> leaf_v
@@ -795,7 +806,7 @@ flowchart TB
                   ▼                                 ▼
        ┌────────────────────┐            ┌────────────────────┐
        │ Map Leaf           │            │ Map Leaf           │
-       │ @0x0B              │            │ @0x24              │
+       │ @0x0B              │            │ @0x20              │
        │ key → @0x00 ("v")  │            │ key → @0x15 ("a")  │
        │ val → @0x02 (2)    │            │ val → @0x17 (1)    │
        └─────────┬──────────┘            └─────────┬──────────┘
@@ -1123,9 +1134,9 @@ Address  Bytes                                      Description
 
 // === Array Leaf for slot 0 (indices 0-15) ===
 
-0x19     0E                                         Array leaf (child)
-                                                      tag 0x0E = 0b0_0_00_1_110
-                                                             R=0 (child), MM=0, B=1 (leaf)
+0x19     4E                                         Array leaf (child)
+                                                      tag 0x4E = 0b0_1_00_1_110
+                                                             R=1 (child), MM=0, B=1 (leaf)
          45                                           node_len=69 (total node size)
          00                                           shift=0
          FF FF                                        bitmap=0xFFFF (all 16 slots)
@@ -1148,9 +1159,9 @@ Address  Bytes                                      Description
 
 // === Array Leaf for slot 1 (index 16) ===
 
-0x5E     0E                                         Array leaf (child)
-                                                      tag 0x0E = 0b0_0_00_1_110
-                                                             R=0 (child), MM=0, B=1 (leaf)
+0x5E     4E                                         Array leaf (child)
+                                                      tag 0x4E = 0b0_1_00_1_110
+                                                             R=1 (child), MM=0, B=1 (leaf)
          09                                           node_len=9 (total node size)
          00                                           shift=0
          01 00                                        bitmap=0x0001 (slot 0 only)
@@ -1158,9 +1169,9 @@ Address  Bytes                                      Description
 
 // === Root Array Branch ===
 
-0x67     46                                         Array branch (root)
-                                                      tag 0x46 = 0b0_1_00_0_110
-                                                             R=1 (root), MM=0, B=0 (branch)
+0x67     06                                         Array branch (root)
+                                                      tag 0x06 = 0b0_0_00_0_110
+                                                             R=0 (root), MM=0, B=0 (branch)
          11                                           node_len=17 (total node size)
          04                                           shift=4
          03 00                                        bitmap=0x0003 (slots 0,1)
@@ -1179,11 +1190,11 @@ Total: 132 bytes (0x84)
 
 Tag byte encoding reference:
 
-- `0x0E` = `0b0_0_00_1_110` → arr child leaf (R=0, MM=0, B=1, TTT=110)
-- `0x46` = `0b0_1_00_0_110` → arr root branch (R=1, MM=0, B=0, TTT=110)
+- `0x0E` = `0b0_0_00_1_110` → arr root leaf (R=0, MM=0, B=1, TTT=110)
+- `0x46` = `0b0_1_00_0_110` → arr child branch (R=1, MM=0, B=0, TTT=110)
 
-**Note:** Child array nodes (R=0) do not have the 4-byte length field. Only the
-root array node (R=1) includes it.
+**Note:** Child array nodes (R=1) do not have the 4-byte length field. Only the
+root array node (R=0) includes it.
 
 ### Lookup Walkthrough: Finding Element at Index 12
 
@@ -1332,7 +1343,7 @@ Container types
 Container node layout
   [Tag 1B] [Length M+1B] [type-specific...]
 
-  arr: shift(1B) + bitmap(2B) + length(4B) + entries(4B * n)
+  arr: shift(1B) + bitmap(2B) + [length(4B) if root] + entries(4B * n)
   map branch: bitmap(4B) + children(4B * n)
   map leaf: key/val pairs(8B * n)
 ```
