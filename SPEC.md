@@ -125,7 +125,7 @@ Example: leaf root arr with one value node at address `0x10` -> tag `0x0E`, payl
 
 Tag bits: `00MMB111` where `B` is branch/leaf flag (0=branch, 1=leaf). Payload is: length encoded in `MM + 1` bytes; if branch: bitmap (u32) and u32 LE addresses of child nodes (entry_count \* 4 bytes); if leaf: u32 LE addresses of key/value pairs (2 \* n_kv_pairs \* 4 bytes). Where `entry_count = popcount(bitmap)`.
 
-Example: leaf map with key node at address `0x20` and value node at address `0x30` -> tag `0x0F`, payload `0x0E 0x20 0x00 0x00 0x00 0x30 0x00 0x00 0x00`
+Example: leaf map with key node at address `0x20` and value node at address `0x30` -> tag `0x0F`, payload `0x0A 0x20 0x00 0x00 0x00 0x30 0x00 0x00 0x00`
 
 ## 5. HAMT (map) and vector trie (arr) nodes
 
