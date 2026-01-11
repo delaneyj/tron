@@ -11,9 +11,9 @@
 | 6        | 2026-01-08 | @oliverlambson            | Revise value tag header format                      |
 | 7        | 2026-01-09 | @oliverlambson            | Remove unnecessary reserved bytes                   |
 | 8        | 2026-01-10 | @oliverlambson            | Be explicit that all addresses are absolute         |
-| 9        | 2026-01-11 | @oliverlambson            | Use a single document type for scalar & tree values |
-| 10       | 2026-01-12 | @oliverlambson            | Remove entry_count from arr/map nodes               |
-| 11       | 2026-01-13 | @oliverlambson            | Only include arr length on root arr nodes           |
+| 9        | 2026-01-10 | @oliverlambson            | Use a single document type for scalar & tree values |
+| 10       | 2026-01-10 | @oliverlambson            | Remove entry_count from arr/map nodes               |
+| 11       | 2026-01-10 | @oliverlambson            | Only include arr length on root arr nodes           |
 
 This document defines the binary format for TRie Object Notation. It is intended to be compatible with JSON primitives while using HAMT (for maps) and vector tries (for arrays) to support fast in-place modifications without rewriting the entire document. The format targets transport and embedding as a single blob in databases or KV stores, not a database or storage engine itself.
 
