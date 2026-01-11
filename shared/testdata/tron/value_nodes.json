@@ -165,18 +165,15 @@
       }
     }
   ],
+  "header": [{ "bytes": "54524F4E", "parsed": { "magic": "TRON" } }],
   "footer": [
     {
-      "bytes": "C50000000000000054524F4E",
-      "parsed": { "root_address": 197, "prev_root_address": 0, "magic": "TRON" }
+      "bytes": "C500000000000000",
+      "parsed": { "root_address": 197, "prev_root_address": 0 }
     },
     {
-      "bytes": "860000004900000054524F4E",
-      "parsed": {
-        "root_address": 134,
-        "prev_root_address": 73,
-        "magic": "TRON"
-      }
+      "bytes": "8600000049000000",
+      "parsed": { "root_address": 134, "prev_root_address": 73 }
     }
   ]
 }
